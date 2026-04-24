@@ -6,6 +6,7 @@ import { SensorGrid } from "../components/sensors/SensorGrid";
 import { LiveChart } from "../components/sensors/LiveChart";
 import { BabyTwin3D } from "../components/twin3d/BabyTwin3D";
 import { FsmStatusBar, deriveFsmState } from "../components/FsmStatusBar";
+import { BackendStatus } from "../components/BackendStatus";
 import { SEVERITY_COLORS } from "../lib/types";
 import { fetchState } from "../lib/api";
 import type { TwinState } from "../lib/types";
@@ -100,6 +101,7 @@ export default function DashboardPage() {
           <p className="text-slate-500 text-xs">Neonatal Bio-Twin · Digital Incubator</p>
         </div>
         <div className="flex items-center gap-3">
+          <BackendStatus />
           <span className={`text-sm font-bold px-3 py-1 rounded-full border ${sevColor} border-current/20`}>
             {sevLabel}
           </span>

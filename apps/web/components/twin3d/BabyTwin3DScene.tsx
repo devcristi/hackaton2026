@@ -1,7 +1,7 @@
 'use client';
 
-import { useState, useMemo, useEffect } from 'react';
-import { Canvas, useThree } from '@react-three/fiber';
+import { useState, useMemo, useEffect, useRef } from 'react';
+import { Canvas, useThree, useFrame } from '@react-three/fiber';
 import { OrbitControls } from '@react-three/drei';
 import * as THREE from 'three';
 import { NiftiHeartVolume } from './NiftiHeartVolume';
@@ -32,6 +32,36 @@ const EnableClipping = () => {
   return null;
 };
 
+// ─── Camera manager to handle smooth transitions ─────────────────────────────
+const CameraManager = ({ targetPosition }: { targetPosition: [number, number, number] | null }) => {
+  const { camera } = useThree();
+  const targetVec = useMemo(() => new THREE.Vector3(), []);
+  const isAnimating = useRef(false);
+
+  useEffect(() => {
+    if (targetPosition) {
+      targetVec.set(...targetPosition);
+      isAnimating.current = true;
+    }
+  }, [targetPosition, targetVec]);
+
+  useFrame(() => {
+    if (isAnimating.current && targetPosition) {
+      // Smoothly interpolate position
+      camera.position.lerp(targetVec, 0.1);
+      camera.lookAt(0, 0, 0);
+
+      // Stop animating when close enough to target
+      if (camera.position.distanceTo(targetVec) < 0.001) {
+        isAnimating.current = false;
+        camera.position.copy(targetVec);
+      }
+    }
+  });
+
+  return null;
+};
+
 // ─── Three.js scene (runs inside <Canvas>) ────────────────────────────────────
 interface SceneProps {
   stressScore:   number;
@@ -48,6 +78,7 @@ interface SceneProps {
   stenosisIntensity: number;
   resetSignal: number;
   onStenosis: (occlusion: number, wss: number) => void;
+  targetCameraPosition: [number, number, number] | null;
 }
 
 const Scene = ({
@@ -65,9 +96,11 @@ const Scene = ({
   stenosisIntensity,
   resetSignal,
   onStenosis,
+  targetCameraPosition,
 }: SceneProps) => (
   <>
     <EnableClipping />
+    <CameraManager targetPosition={targetCameraPosition} />
     {/* ... lights and helpers ... */}
     <color attach="background" args={['#080c12']} />
     <ambientLight intensity={0.25} />
@@ -76,7 +109,7 @@ const Scene = ({
     <pointLight position={[0, -2, 2]} intensity={0.5} color="#881122" />
     <spotLight position={[0, 3, 2]} angle={0.55} penumbra={0.7} intensity={1.2} color="#ffffff" castShadow />
     <gridHelper args={[6, 30, '#0d1a2e', '#0a1220']} position={[0, -1.2, 0]} />
-    <OrbitControls enablePan={false} minDistance={1.8} maxDistance={5.5} autoRotate={false} makeDefault />
+    <OrbitControls enablePan={false} minDistance={0.5} maxDistance={8.0} autoRotate={false} makeDefault />
 
     <NiftiHeartVolume
       stressScore={stressScore}
@@ -123,6 +156,8 @@ export const BabyTwin3DScene = ({
   const [stenosisRadius, setStenosisRadius] = useState(0.08);
   const [stenosisIntensity, setStenosisIntensity] = useState(0.70);
   const [resetSignal, setResetSignal] = useState(0);
+
+  const [targetCameraPosition, setTargetCameraPosition] = useState<[number, number, number] | null>(null);
 
   // ── Anatomy Visibility & Opacity ────────────────────────────────────────────
   const [visibleClasses, setVisibleClasses] = useState<Record<string, boolean>>({
@@ -398,6 +433,43 @@ export const BabyTwin3DScene = ({
       {/* ── 3D Canvas ─────────────────────────────────────────────────────── */}
       <div className="relative flex-1 min-h-0 rounded-xl overflow-hidden border border-slate-700/50 bg-gradient-to-b from-slate-900 to-[#060a10]">
         
+        {/* Navigation Gizmo Overlay */}
+        <div className="absolute top-4 right-4 z-10 flex flex-col items-center gap-2">
+          <div className="bg-slate-950/60 backdrop-blur-md p-1.5 rounded-full border border-slate-700/50 flex flex-col items-center gap-1 shadow-2xl">
+            <button 
+              onClick={() => setTargetCameraPosition([0, 4, 0])}
+              className="w-8 h-8 rounded-full flex items-center justify-center text-[10px] font-bold text-emerald-400 hover:bg-emerald-500/20 transition-all border border-emerald-500/20"
+              title="Top View (Y)"
+            >
+              Y
+            </button>
+            <div className="flex gap-1">
+              <button 
+                onClick={() => setTargetCameraPosition([4, 0, 0])}
+                className="w-8 h-8 rounded-full flex items-center justify-center text-[10px] font-bold text-red-400 hover:bg-red-500/20 transition-all border border-red-500/20"
+                title="Right View (X)"
+              >
+                X
+              </button>
+              <button 
+                onClick={() => setTargetCameraPosition([0.8, 1.2, 3.5])}
+                className="w-8 h-8 rounded-full flex items-center justify-center text-[10px] font-bold text-white hover:bg-slate-700 transition-all border border-slate-600 shadow-inner"
+                title="Reset View"
+              >
+                🏠
+              </button>
+              <button 
+                onClick={() => setTargetCameraPosition([0, 0, 4])}
+                className="w-8 h-8 rounded-full flex items-center justify-center text-[10px] font-bold text-blue-400 hover:bg-blue-500/20 transition-all border border-blue-500/20"
+                title="Front View (Z)"
+              >
+                Z
+              </button>
+            </div>
+            <div className="text-[8px] text-slate-500 font-bold uppercase mt-1">Orbit</div>
+          </div>
+        </div>
+
         {stenosisEvent && (
           <div className="absolute top-4 left-1/2 -translate-x-1/2 bg-red-950/90 border border-red-500/50 rounded-xl p-3 shadow-[0_0_20px_rgba(220,38,38,0.4)] z-10 flex flex-col items-center animate-in fade-in slide-in-from-top-4">
             <span className="text-red-400 text-xs font-mono font-bold uppercase tracking-widest mb-1">Hemodynamics Alert</span>
@@ -419,7 +491,7 @@ export const BabyTwin3DScene = ({
         )}
 
         <Canvas
-          camera={{ position: [0, 0.2, 3.2], fov: 42 }}
+          camera={{ position: [0.8, 1.2, 3.5], fov: 38 }}
           shadows
           gl={{ antialias: true, alpha: true }}
           style={{ width: '100%', height: '100%' }}
@@ -439,6 +511,7 @@ export const BabyTwin3DScene = ({
             stenosisIntensity={stenosisIntensity}
             resetSignal={resetSignal}
             onStenosis={(occlusion, wss) => setStenosisEvent({ occlusion, wss })}
+            targetCameraPosition={targetCameraPosition}
           />
         </Canvas>
       </div>

@@ -36,6 +36,10 @@ web:
 	@echo ">>> Next.js on :3000"
 	cd $(WEB_DIR) && npm run dev
 
+web-mock:
+	@echo ">>> Next.js on :3000 (MOCK MODE - no backend needed)"
+	cd $(WEB_DIR) && set NEXT_PUBLIC_MOCK_MODE=true&& npm run dev
+
 mock:
 	@echo ">>> Sensor mock [normal] → http://localhost:8000/ingest"
 	cd $(API_DIR) && $(PYTHON) -m hardware_mock.sensor_simulator --scenario normal

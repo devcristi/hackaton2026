@@ -3,6 +3,9 @@ import { useEffect, useRef } from "react";
 import type { TwinState } from "./types";
 import { getStreamUrl } from "./api";
 import { useTwinStore } from "../store/twin-store";
+import { generateMockTwinState } from "./mock-data";
+
+const MOCK_MODE = process.env.NEXT_PUBLIC_MOCK_MODE === "true";
 
 /**
  * Connects to the SSE /stream endpoint and pushes TwinState updates
@@ -14,6 +17,16 @@ export function useTwinStream(): void {
   const addHistory = useTwinStore((s) => s.addHistory);
 
   useEffect(() => {
+    if (MOCK_MODE) {
+      console.log("[useTwinStream] Running in MOCK MODE");
+      const interval = setInterval(() => {
+        const data = generateMockTwinState();
+        setState(data);
+        addHistory(data.reading);
+      }, 1000);
+      return () => clearInterval(interval);
+    }
+
     let retryTimeout: ReturnType<typeof setTimeout>;
 
     function connect(): void {

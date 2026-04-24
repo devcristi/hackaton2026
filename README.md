@@ -143,6 +143,8 @@ Runs on → **http://localhost:3000**
 
 Windows shortcut: [`start-frontend.bat`](start-frontend.bat)
 
+> 💡 **Frontend Mock Mode:** If you want to run the frontend **without any backend**, use `make web-mock`. This will generate realistic sensor data directly in the browser.
+
 ### Terminal 3 — Sensor simulator (if no real hardware)
 
 ```bash

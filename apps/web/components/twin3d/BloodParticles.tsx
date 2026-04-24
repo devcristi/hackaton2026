@@ -179,6 +179,8 @@ export const BloodParticles = ({ spO2, heartRate }: BloodParticlesProps) => {
 
   useFrame((_, delta) => {
     if (!pointsRef.current) return;
+    // RBC animation stopped as requested
+    /*
     const posAttr = pointsRef.current.geometry.attributes.position as THREE.BufferAttribute;
     const arr     = posAttr.array as Float32Array;
 
@@ -193,6 +195,7 @@ export const BloodParticles = ({ spO2, heartRate }: BloodParticlesProps) => {
     });
 
     posAttr.needsUpdate = true;
+    */
   });
 
   return (

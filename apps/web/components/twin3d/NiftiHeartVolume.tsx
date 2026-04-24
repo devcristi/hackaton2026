@@ -18,6 +18,7 @@ import { useRef, useEffect, useState, useMemo } from 'react';
 import { useFrame } from '@react-three/fiber';
 import * as THREE from 'three';
 import { mergeVertices } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
+import { getCardiacFrame, toCardiacT } from '../../lib/cardiacAnimator';
 
 // ─── JSON mesh format ─────────────────────────────────────────────────────────
 interface MeshJson {
@@ -92,9 +93,23 @@ export const NiftiHeartVolume = ({
   const [geometries, setGeometries] = useState<Record<string, THREE.BufferGeometry | null>>({});
   const [loading,    setLoading   ] = useState(true);
   const [error,      setError     ] = useState('');
+  // Bounding-box centre of each segment — used to scale around the segment's
+  // own geometric centroid instead of the world origin (prevents meshes from
+  // sliding into each other during the cardiac cycle).
+  const [centroids,  setCentroids ] = useState<Record<string, THREE.Vector3>>({});
 
   const groupRef   = useRef<THREE.Group>(null);
-  
+
+  // ── Per-segment animation refs (CardiacAnimator drives these) ─────────────
+  const lvRef    = useRef<THREE.Group>(null);   // Left Ventricle
+  const rvRef    = useRef<THREE.Group>(null);   // Right Ventricle
+  const laRef    = useRef<THREE.Group>(null);   // Left Atrium
+  const raRef    = useRef<THREE.Group>(null);   // Right Atrium
+  const myoRef   = useRef<THREE.Group>(null);   // Myocardium wall
+  const aortaRef = useRef<THREE.Group>(null);   // Aorta
+  const paRef    = useRef<THREE.Group>(null);   // Pulmonary Artery
+  const corRef   = useRef<THREE.Group>(null);   // Coronary Arteries
+
   // Materials that need to be updated on each frame
   const anatomyMats = useRef<THREE.MeshStandardMaterial[]>([]);
   const vesselMats  = useRef<THREE.MeshStandardMaterial[]>([]);
@@ -137,6 +152,18 @@ export const NiftiHeartVolume = ({
           geos[p] = geo;
         });
         setGeometries(geos);
+
+        // Compute bounding-box centroid for every segment geometry.
+        // These are static values derived from the NIfTI mesh positions.
+        const comps: Record<string, THREE.Vector3> = {};
+        Object.entries(geos).forEach(([key, geo]) => {
+          geo.computeBoundingBox();
+          const c = new THREE.Vector3();
+          geo.boundingBox!.getCenter(c);
+          comps[key] = c;
+        });
+        setCentroids(comps);
+
         setLoading(false);
       })
       .catch(e => {
@@ -173,39 +200,66 @@ export const NiftiHeartVolume = ({
   const vesselColor  = useMemo(() => new THREE.Color('#f032e6'), []); // Magenta
 
   // ── Animation loop ─────────────────────────────────────────────────────────
-  const bps = heartRate / 60;
-
   useFrame(({ clock }) => {
-    const t     = clock.getElapsedTime();
-    const phase = (t * bps) % 1.0;
+    const elapsed = clock.getElapsedTime();
 
-    // Heart beat eliminated (systole = 0)
-    const systole = 0;
-    const pulseScale = 1.0;
+    // ── CardiacAnimator: per-segment scale + rotation ────────────────────────
+    const ct    = toCardiacT(elapsed, heartRate);
+    const frame = getCardiacFrame(ct);
 
+    // Left Ventricle — scale + apical Z-torsion
+    if (lvRef.current) {
+      lvRef.current.scale.set(...frame.leftVentricle.scale);
+      lvRef.current.rotation.z = frame.leftVentricle.rotation[2];
+    }
+    // Right Ventricle — scale + mild counter-twist
+    if (rvRef.current) {
+      rvRef.current.scale.set(...frame.rightVentricle.scale);
+      rvRef.current.rotation.z = frame.rightVentricle.rotation[2];
+    }
+    // Left Atrium
+    if (laRef.current) laRef.current.scale.set(...frame.leftAtrium.scale);
+    // Right Atrium
+    if (raRef.current) raRef.current.scale.set(...frame.rightAtrium.scale);
+    // Myocardium — radial wall thickening
+    if (myoRef.current) myoRef.current.scale.set(...frame.myocardium.scale);
+    // Aorta — radial pressure-wave expansion
+    if (aortaRef.current) aortaRef.current.scale.set(...frame.aorta.scale);
+    // Pulmonary Artery — more compliant radial expansion
+    if (paRef.current) paRef.current.scale.set(...frame.pulmonaryArtery.scale);
+    // Coronaries — systolic compression → diastolic reactive hyperaemia
+    if (corRef.current) corRef.current.scale.set(...frame.coronaries.scale);
+
+    // ── Slow cinematic drift on the whole heart ──────────────────────────────
     if (groupRef.current) {
-      groupRef.current.scale.setScalar(pulseScale);
-      groupRef.current.rotation.y = 0;
-      groupRef.current.rotation.z = 0;
+      groupRef.current.rotation.y = Math.sin(elapsed * 0.08) * 0.25;
+      groupRef.current.rotation.z = Math.sin(elapsed * 0.05) * 0.04;
     }
 
-    const sf    = stressScore / 100;
-    const ox    = spO2 / 100;
-    const tdev  = Math.max(0, temperature - 36.5) / 3.0;
-    const emI   = 0.10 + sf * 0.45 + tdev * 0.15 + systole * 0.15;
+    // ── Emissive material update ─────────────────────────────────────────────
+    const sf   = stressScore / 100;
+    const ox   = spO2 / 100;
+    const tdev = Math.max(0, temperature - 36.5) / 3.0;
 
-    // Update standard anatomy materials
+    // Emissive brightens at peak ventricular systole for a "glow" heartbeat effect
+    const beatPulse = frame.phase === 'ventricularSystole'
+      ? frame.phaseProgress * 0.20
+      : 0;
+    const emI = 0.10 + sf * 0.45 + tdev * 0.15 + beatPulse;
+
     anatomyMats.current.forEach(mat => {
       mat.emissive.copy(stressEmissive(sf));
       mat.emissiveIntensity = emI;
     });
 
-    // Update vessel materials (coronaries)
+    // Coronary vessels brighten during their diastolic reperfusion burst
     const oxy = ox * ox;
+    const corPulse = frame.phase === 'diastole' && frame.phaseProgress < 0.35
+      ? (frame.phaseProgress / 0.35) * 0.28
+      : 0;
     vesselMats.current.forEach(mat => {
-      // Base color remains distinct, just pulse the emissive based on oxygenation/stress
       mat.emissive.setRGB(0.55 * oxy + 0.10, 0.01, 0.02 + 0.25 * (1 - oxy));
-      mat.emissiveIntensity = 0.18 + sf * 0.40 + systole * 0.22;
+      mat.emissiveIntensity = 0.18 + sf * 0.40 + corPulse;
     });
   });
 
@@ -327,94 +381,132 @@ export const NiftiHeartVolume = ({
     ...clipProps
   };
 
-  const isVisible = (part: string) => {
-    return visibleClasses[part] !== false; // true by default
+  const isVisible = (part: string) => visibleClasses[part] !== false;
+
+  // ── Scale-around-centroid helpers ─────────────────────────────────────────
+  // cg(key) → [cx, cy, cz]  — the group's world position (= segment centroid)
+  // ci(key) → [-cx,-cy,-cz] — the mesh's local offset so its world pos = 0,0,0
+  //
+  // Math: group at (cx,cy,cz) scales its children around (cx,cy,cz).
+  //       Mesh at local (-cx,-cy,-cz) renders at world (0,0,0) when scale=1.
+  //       After group scale (sx,sy,sz):
+  //         vertex_world = (cx,cy,cz) + (sx,sy,sz)*(v_local - 0)
+  //                      = (cx*(1-sx)+sx*vx, ...)   ← scales around centroid ✓
+  const cg = (key: string): [number, number, number] => {
+    const c = centroids[key];
+    return c ? [c.x, c.y, c.z] : [0, 0, 0];
+  };
+  const ci = (key: string): [number, number, number] => {
+    const c = centroids[key];
+    return c ? [-c.x, -c.y, -c.z] : [0, 0, 0];
   };
 
   return (
     <group ref={groupRef} position={[0, 0.05, 0]}>
-      
-      {/* Myocardium */}
+
+      {/* ── MYOCARDIUM — wall thickens radially during systole ──────────────
+           CardiacAnimator: scale [1.08,1.08,1.02] at peak systole.
+           Group origin = myocardium mesh centroid → scales outward correctly. */}
       {isVisible('myocardium') && geometries.myocardium && (
-        <mesh geometry={geometries.myocardium} castShadow receiveShadow>
-          <meshStandardMaterial ref={registerAnatomyMat} color={myoColor} {...matProps} />
-        </mesh>
+        <group ref={myoRef} position={cg('myocardium')}>
+          <mesh geometry={geometries.myocardium} position={ci('myocardium')} castShadow receiveShadow>
+            <meshStandardMaterial ref={registerAnatomyMat} color={myoColor} {...matProps} />
+          </mesh>
+        </group>
       )}
 
-      {/* Left Ventricle */}
+      {/* ── LEFT VENTRICLE — scale [0.84,0.84,0.91] + −5.7° apical twist ───
+           Centroid ≈ left-inferior of global origin → shrinks toward its own
+           centre, not sliding across heart.                                 */}
       {isVisible('left_ventricle') && geometries.left_ventricle && (
-        <mesh geometry={geometries.left_ventricle} castShadow receiveShadow>
-          <meshStandardMaterial ref={registerAnatomyMat} color={lvColor} {...matProps} />
-        </mesh>
+        <group ref={lvRef} position={cg('left_ventricle')}>
+          <mesh geometry={geometries.left_ventricle} position={ci('left_ventricle')} castShadow receiveShadow>
+            <meshStandardMaterial ref={registerAnatomyMat} color={lvColor} {...matProps} />
+          </mesh>
+        </group>
       )}
 
-      {/* Right Ventricle */}
+      {/* ── RIGHT VENTRICLE — scale [0.87,0.87,0.93] + mild counter-twist ──*/}
       {isVisible('right_ventricle') && geometries.right_ventricle && (
-        <mesh geometry={geometries.right_ventricle} castShadow receiveShadow>
-          <meshStandardMaterial ref={registerAnatomyMat} color={rvColor} {...matProps} />
-        </mesh>
+        <group ref={rvRef} position={cg('right_ventricle')}>
+          <mesh geometry={geometries.right_ventricle} position={ci('right_ventricle')} castShadow receiveShadow>
+            <meshStandardMaterial ref={registerAnatomyMat} color={rvColor} {...matProps} />
+          </mesh>
+        </group>
       )}
 
-      {/* Left Atrium */}
+      {/* ── LEFT ATRIUM — scale [0.91,0.91,0.91] during atrial systole ─────*/}
       {isVisible('left_atrium') && geometries.left_atrium && (
-        <mesh geometry={geometries.left_atrium} castShadow receiveShadow>
-          <meshStandardMaterial ref={registerAnatomyMat} color={laColor} {...matProps} />
-        </mesh>
+        <group ref={laRef} position={cg('left_atrium')}>
+          <mesh geometry={geometries.left_atrium} position={ci('left_atrium')} castShadow receiveShadow>
+            <meshStandardMaterial ref={registerAnatomyMat} color={laColor} {...matProps} />
+          </mesh>
+        </group>
       )}
 
-      {/* Right Atrium */}
+      {/* ── RIGHT ATRIUM — scale [0.91,0.91,0.91] during atrial systole ────*/}
       {isVisible('right_atrium') && geometries.right_atrium && (
-        <mesh geometry={geometries.right_atrium} castShadow receiveShadow>
-          <meshStandardMaterial ref={registerAnatomyMat} color={raColor} {...matProps} />
-        </mesh>
+        <group ref={raRef} position={cg('right_atrium')}>
+          <mesh geometry={geometries.right_atrium} position={ci('right_atrium')} castShadow receiveShadow>
+            <meshStandardMaterial ref={registerAnatomyMat} color={raColor} {...matProps} />
+          </mesh>
+        </group>
       )}
 
-      {/* Aorta */}
+      {/* ── AORTA — radial expansion [1.05,1.05,1.00] on pressure wave ─────*/}
       {isVisible('aorta') && geometries.aorta && (
-        <mesh geometry={geometries.aorta} castShadow receiveShadow>
-          <meshStandardMaterial ref={registerAnatomyMat} color={aortaColor} {...matProps} roughness={0.3} />
-        </mesh>
+        <group ref={aortaRef} position={cg('aorta')}>
+          <mesh geometry={geometries.aorta} position={ci('aorta')} castShadow receiveShadow>
+            <meshStandardMaterial ref={registerAnatomyMat} color={aortaColor} {...matProps} roughness={0.3} />
+          </mesh>
+        </group>
       )}
 
-      {/* Pulmonary Artery */}
+      {/* ── PULMONARY ARTERY — more compliant radial [1.07,1.07,1.00] ──────*/}
       {isVisible('pulmonary_artery') && geometries.pulmonary_artery && (
-        <mesh geometry={geometries.pulmonary_artery} castShadow receiveShadow>
-          <meshStandardMaterial ref={registerAnatomyMat} color={pulmColor} {...matProps} roughness={0.3} />
-        </mesh>
+        <group ref={paRef} position={cg('pulmonary_artery')}>
+          <mesh geometry={geometries.pulmonary_artery} position={ci('pulmonary_artery')} castShadow receiveShadow>
+            <meshStandardMaterial ref={registerAnatomyMat} color={pulmColor} {...matProps} roughness={0.3} />
+          </mesh>
+        </group>
       )}
 
-      {/* Coronary Arteries */}
+      {/* ── CORONARIES — systolic compression [0.94] → diastolic burst [1.03]
+           Coronaries have a fine tubular mesh — subtle scale is very visible. */}
       {showVessels && isVisible('coronary_arteries') && geometries.coronary_arteries && (
-        <mesh
-          geometry={geometries.coronary_arteries}
-          castShadow
-          onClick={stenosisToolActive ? handleCoronaryClick : undefined}
-          onPointerOver={(e: any) => {
-            if (stenosisToolActive) {
-              e.stopPropagation();
-              document.body.style.cursor = 'crosshair';
-            }
-          }}
-          onPointerOut={(e: any) => {
-            if (stenosisToolActive) {
-              e.stopPropagation();
-              document.body.style.cursor = 'auto';
-            }
-          }}
-        >
-          <meshStandardMaterial
-            ref={registerVesselMat}
-            color="#ffffff"
-            vertexColors={true}
-            roughness={0.35}
-            metalness={0.05}
-            flatShading={false}
-            side={THREE.FrontSide}
-            transparent={opacity < 1.0}
-            opacity={opacity}
-            {...clipProps}
-          />
-        </mesh>
+        <group ref={corRef} position={cg('coronary_arteries')}>
+          <mesh
+            geometry={geometries.coronary_arteries}
+            position={ci('coronary_arteries')}
+            castShadow
+            onClick={stenosisToolActive ? handleCoronaryClick : undefined}
+            onPointerOver={(e: any) => {
+              if (stenosisToolActive) {
+                e.stopPropagation();
+                document.body.style.cursor = 'crosshair';
+              }
+            }}
+            onPointerOut={(e: any) => {
+              if (stenosisToolActive) {
+                e.stopPropagation();
+                document.body.style.cursor = 'auto';
+              }
+            }}
+          >
+            <meshStandardMaterial
+              ref={registerVesselMat}
+              color="#ffffff"
+              vertexColors={true}
+              roughness={0.35}
+              metalness={0.05}
+              flatShading={false}
+              side={THREE.FrontSide}
+              transparent={opacity < 1.0}
+              opacity={opacity}
+              {...clipProps}
+            />
+          </mesh>
+        </group>
       )}
     </group>
   );
