@@ -1,41 +1,69 @@
-# See https://help.github.com/articles/ignoring-files/ for more about ignoring files.
+# ─── Node / Next.js ──────────────────────────────────────────────
+node_modules/
+**/node_modules/
+.next/
+**/.next/
+out/
+build/
+dist/
+*.tsbuildinfo
+next-env.d.ts
 
-# dependencies
-/node_modules
-/.pnp
-.pnp.*
-.yarn/*
-!.yarn/patches
-!.yarn/plugins
-!.yarn/releases
-!.yarn/versions
+# ─── Python ──────────────────────────────────────────────────────
+__pycache__/
+**/__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+.venv/
+venv/
+env/
+ENV/
+pip-log.txt
+pip-delete-this-directory.txt
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
 
-# testing
-/coverage
+# ─── Databases / Runtime data ────────────────────────────────────
+*.db
+*.sqlite
+*.sqlite3
+apps/pi/data/*.db
 
-# next.js
-/.next/
-/out/
+# ─── ML artifacts ────────────────────────────────────────────────
+*.pkl
+*.joblib
 
-# production
-/build
+# ─── ESP32 / PlatformIO ──────────────────────────────────────────
+.pio/
+.pioenvs/
+.piolibdeps/
+.vscode/.browse.c_cpp.db*
+.vscode/ipch/
 
-# misc
+# ─── Env & secrets ───────────────────────────────────────────────
+.env
+.env.local
+.env.*.local
+*.env
+
+# ─── OS / Editor ─────────────────────────────────────────────────
 .DS_Store
-*.pem
-
-# debug
+Thumbs.db
+*.log
 npm-debug.log*
 yarn-debug.log*
 yarn-error.log*
-.pnpm-debug.log*
+.idea/
+.vscode/*
+!.vscode/settings.json
+!.vscode/extensions.json
 
-# env files (can opt-in for committing if needed)
-.env*
+# ─── Package manager lockfiles (keep package-lock.json, ignore others optionally) ─
+# pnpm-lock.yaml
+# yarn.lock
 
-# vercel
-.vercel
-
-# typescript
-*.tsbuildinfo
-next-env.d.ts
+# ─── Large medical datasets (optional — uncomment if too heavy for git) ──
+# apps/web/public/heart/*.nii.gz

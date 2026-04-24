@@ -1,0 +1,37 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+html, body {
+  background-color: #020617; /* slate-950 */
+  color: #f8fafc;
+}
+
+/* FSM – alarm spin (critical siren) */
+@keyframes alarm-spin {
+  0%   { transform: rotate(-18deg) scale(1);   opacity: 1; }
+  25%  { transform: rotate(18deg)  scale(1.08); opacity: 1; }
+  50%  { transform: rotate(-18deg) scale(1);   opacity: 0.7; }
+  75%  { transform: rotate(18deg)  scale(1.08); opacity: 1; }
+  100% { transform: rotate(-18deg) scale(1);   opacity: 1; }
+}
+.animate-alarm { animation: alarm-spin 0.45s ease-in-out infinite; }
+
+/* FSM – incubator shake (motion state) */
+@keyframes shake {
+  0%, 100% { transform: translateX(0)   translateY(0); }
+  15%       { transform: translateX(-3px) translateY(1px); }
+  30%       { transform: translateX(3px)  translateY(-1px); }
+  45%       { transform: translateX(-2px) translateY(2px); }
+  60%       { transform: translateX(2px)  translateY(-2px); }
+  75%       { transform: translateX(-3px) translateY(1px); }
+  90%       { transform: translateX(3px)  translateY(0); }
+}
+.animate-shake { animation: shake 0.6s ease-in-out infinite; }
+
+/* FSM – pulsing glow ring */
+@keyframes pulse-glow {
+  0%, 100% { box-shadow: 0 0 0 0 currentColor; opacity: 1; }
+  50%       { box-shadow: 0 0 0 6px transparent; opacity: 0.75; }
+}
+.animate-pulse-glow { animation: pulse-glow 1s ease-in-out infinite; }
