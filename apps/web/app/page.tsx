@@ -7,6 +7,7 @@ import { LiveChart } from "../components/sensors/LiveChart";
 import { BabyTwin3D } from "../components/twin3d/BabyTwin3D";
 import { FsmStatusBar, deriveFsmState } from "../components/FsmStatusBar";
 import { BackendStatus } from "../components/BackendStatus";
+import { SimulationControls } from "../components/SimulationControls";
 import { SEVERITY_COLORS } from "../lib/types";
 import { fetchState } from "../lib/api";
 import type { TwinState } from "../lib/types";
@@ -21,14 +22,23 @@ const deriveStressScore = (s: TwinState): number => {
   };
   let score = severityBase[s.severity] ?? 15;
 
-  // Heart rate deviation (Normal: 120-140)
-  const bpm = s.reading.bpm ?? 130;
-  if (bpm > 160) score += (bpm - 160) * 0.5;
+  // Heart rate deviation (Normal: 120-160 for preterm)
+  const bpm = s.reading.bpm ?? 140;
+  if (bpm > 180) score += (bpm - 180) * 0.5;
   if (bpm < 100) score += (100 - bpm) * 1.0;
 
-  // SpO2 penalty
-  const spo2 = s.reading.spO2 ?? 98;
-  if (spo2 < 95) score += (95 - spo2) * 4;
+  // SpO2 penalty (Target: 88-94 for preterm)
+  const spo2 = s.reading.spO2 ?? 92;
+  if (spo2 < 88) score += (88 - spo2) * 5;
+  if (spo2 > 96) score += (spo2 - 96) * 2; // Oxygen toxicity risk
+
+  // Blood pressure penalty (Normal: 40-60 / 25-45 for preterm)
+  const sys = s.reading.bloodPressureSystolic ?? 55;
+  const dia = s.reading.bloodPressureDiastolic ?? 35;
+  if (sys < 40) score += (40 - sys) * 2.0;
+  if (sys > 70) score += (sys - 70) * 1.0;
+  if (dia < 25) score += (25 - dia) * 2.0;
+  if (dia > 50) score += (dia - 50) * 1.0;
 
   // Lid-open penalty (cold draft / noise stress)
   if (s.reading.lidOpen) score += 10;
@@ -64,8 +74,8 @@ export default function DashboardPage() {
     [state]
   );
   
-  const heartRate = state?.reading.bpm ?? 130;
-  const spO2      = state?.reading.spO2 ?? 98;
+  const heartRate = state?.reading.bpm ?? 140;
+  const spO2      = state?.reading.spO2 ?? 92;
   const tempC     = state?.reading.airTempC ?? state?.reading.mpuTempC ?? 37.0;
 
   const derivedFsmState = useMemo(() => {
@@ -133,6 +143,9 @@ export default function DashboardPage() {
               {state.activeRules.join(" · ")}
             </div>
           )}
+
+          {/* Physiological Simulation Controls (Manual Override) */}
+          <SimulationControls />
 
           {/* Sensor Details (Unified Grid) */}
           <div className="flex flex-col gap-3">

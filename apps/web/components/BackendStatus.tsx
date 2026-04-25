@@ -11,7 +11,7 @@ interface HealthPayload {
 export const BackendStatus = () => {
   const [status, setStatus]   = useState<Status>("checking");
   const [detail, setDetail]   = useState<string>("");
-  const base = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000";
+  const base = process.env.NEXT_PUBLIC_API_URL ?? "/api/pi";
 
   useEffect(() => {
     let cancelled = false;
@@ -19,8 +19,6 @@ export const BackendStatus = () => {
     const check = async () => {
       try {
         const res = await fetch(`${base}/health`, {
-          // ngrok free tier injects a browser-warning page; bypass it
-          headers: { "ngrok-skip-browser-warning": "1" },
           cache: "no-store",
         });
         if (!res.ok) throw new Error(`HTTP ${res.status}`);

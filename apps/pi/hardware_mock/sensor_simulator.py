@@ -11,13 +11,13 @@ import urllib.request
 import urllib.error
 import json
 
-API_URL = "http://localhost:8000/ingest"
+API_URL = "https://residency-resistant-perfected.ngrok-free.dev/health"
 
 # Physiological base values (Infant)
-BPM_BASE = 125.0
-SYS_BASE = 70.0
-DIA_BASE = 45.0
-SPO2_BASE = 98.0
+BPM_BASE = 140.0
+SYS_BASE = 55.0
+DIA_BASE = 35.0
+SPO2_BASE = 92.0
 
 # Current simulated state for slow variations
 _state = {
@@ -35,16 +35,17 @@ def generate_reading(t: float, scenario: str = "normal") -> dict:
     ts = int(time.time())
 
     # --- Slow Physiological Variations (Random Walk) ---
-    _state["bpm"] += random.uniform(-0.1, 0.1)
-    _state["sys"] += random.uniform(-0.05, 0.05)
-    _state["dia"] += random.uniform(-0.03, 0.03)
+    # Very slight variations to stay within the tight ranges
+    _state["bpm"] += random.uniform(-0.05, 0.05)
+    _state["sys"] += random.uniform(-0.02, 0.02)
+    _state["dia"] += random.uniform(-0.02, 0.02)
     _state["spo2"] += random.uniform(-0.01, 0.01)
 
-    # Clamping
-    _state["bpm"] = max(110, min(140, _state["bpm"]))
-    _state["sys"] = max(60, min(80, _state["sys"]))
-    _state["dia"] = max(35, min(55, _state["dia"]))
-    _state["spo2"] = max(95, min(100, _state["spo2"]))
+    # Clamping (Preterm Normal Ranges)
+    _state["bpm"] = max(138.0, min(142.0, _state["bpm"]))
+    _state["sys"] = max(53.0, min(57.0, _state["sys"]))
+    _state["dia"] = max(33.0, min(37.0, _state["dia"]))
+    _state["spo2"] = max(91.0, min(93.0, _state["spo2"]))
 
     # --- Physical Sensors ---
     # LDR
@@ -103,7 +104,15 @@ def generate_reading(t: float, scenario: str = "normal") -> dict:
 
 def post(payload: dict) -> int:
     data = json.dumps(payload).encode("utf-8")
-    req = urllib.request.Request(API_URL, data=data, headers={"Content-Type": "application/json"}, method="POST")
+    req = urllib.request.Request(
+        API_URL,
+        data=data,
+        headers={
+            "Content-Type": "application/json",
+            "ngrok-skip-browser-warning": "1",
+        },
+        method="POST",
+    )
     try:
         with urllib.request.urlopen(req, timeout=3) as resp:
             return resp.status

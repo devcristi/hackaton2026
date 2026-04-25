@@ -18,14 +18,14 @@ export const SensorGrid = ({ state }: Props) => {
         label="Heart Rate"
         value={fmt(r.bpm, 0)}
         unit="bpm"
-        severity={r.bpm && (r.bpm < 100 || r.bpm > 170) ? "alert" : "normal"}
+        severity={r.bpm && (r.bpm < 100 || r.bpm > 180) ? "alert" : "normal"}
         sub="BPM"
       />
       <SensorCard
         label="Oxygen"
         value={fmt(r.spO2, 0)}
         unit="%"
-        severity={r.spO2 && r.spO2 < 94 ? "critical" : "normal"}
+        severity={r.spO2 && (r.spO2 < 88 || r.spO2 > 96) ? "critical" : "normal"}
         sub="SpO₂"
       />
       <SensorCard

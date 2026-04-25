@@ -5,6 +5,7 @@ import { useFrame } from '@react-three/fiber';
 import * as THREE from 'three';
 import { stressToColor } from './useStressColor';
 import { getCardiacFrame, toCardiacT } from '../../lib/cardiacAnimator';
+import { useTwinStore } from '../../store/twin-store';
 
 export interface HeartMeshProps {
   stressScore: number;
@@ -19,6 +20,8 @@ export const HeartMesh = ({
   temperature,
   clipPlane,
 }: HeartMeshProps) => {
+  const isAnimating = useTwinStore((s) => s.isAnimating);
+
   // ── Top-level cinematic drift group ──────────────────────────────────────
   const groupRef = useRef<THREE.Group>(null);
 
@@ -66,6 +69,7 @@ export const HeartMesh = ({
 
   // ── Animation loop ────────────────────────────────────────────────────────
   useFrame(({ clock }) => {
+    if (!isAnimating) return;
     const elapsed = clock.getElapsedTime();
 
     // Convert wall-clock seconds + BPM → normalised cardiac cycle time [0,1]

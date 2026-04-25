@@ -41,7 +41,7 @@
   "physics": {
     "newtonCoolingK_closed": 0.08,
     "newtonCoolingK_open": 0.25,
-    "babyMassKg": 3.2,
+    "babyMassKg": 1.5,
     "specificHeatJkgK": 3470,
     "heaterPowerW": 80
   }

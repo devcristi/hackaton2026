@@ -5,22 +5,24 @@ Returns severity level and list of active rule names.
 from __future__ import annotations
 from .models import SensorReading, Severity
 
-# --- Physiological Thresholds (Infant/Neonatal) ---
-# BPM (Heart Rate) - Normal: 110-150 for infants
-BPM_MIN = 100.0
-BPM_MAX = 170.0
-BPM_CRIT_LOW = 80.0
+# --- Physiological Thresholds (Preterm Newborn) ---
+# BPM (Heart Rate) - Normal: 120-160 for preterm
+BPM_MIN = 120.0
+BPM_MAX = 160.0
+BPM_CRIT_LOW = 100.0
 BPM_CRIT_HIGH = 200.0
 
-# Blood Pressure (mmHg) - Term infant approx 60-80 / 40-50
-BP_SYS_MIN = 50.0
-BP_SYS_MAX = 95.0
-BP_DIA_MIN = 30.0
-BP_DIA_MAX = 60.0
+# Blood Pressure (mmHg) - Preterm approx 40-60 / 25-45
+BP_SYS_MIN = 40.0
+BP_SYS_MAX = 70.0
+BP_DIA_MIN = 25.0
+BP_DIA_MAX = 50.0
 
-# SpO2 (Oxygen Saturation) - Normal: 95-100%
-SPO2_WARN = 94.0
-SPO2_CRIT = 90.0
+# SpO2 (Oxygen Saturation) - Normal Preterm: 88-94% (avoid >96%)
+SPO2_WARN_LOW = 88.0
+SPO2_CRIT_LOW = 84.0
+SPO2_WARN_HIGH = 96.0
+SPO2_CRIT_HIGH = 98.0
 
 # --- Physical Thresholds ---
 LIGHT_LUX_HIGH = 1000.0
@@ -75,10 +77,14 @@ def classify(reading: SensorReading) -> tuple[Severity, list[str]]:
     # --- SpO2 ---
     spo2 = reading.spO2
     if spo2 is not None:
-        if spo2 < SPO2_CRIT:
+        if spo2 < SPO2_CRIT_LOW:
             flag("hypoxia_critical", 3)
-        elif spo2 < SPO2_WARN:
+        elif spo2 < SPO2_WARN_LOW:
             flag("hypoxia", 2)
+        elif spo2 > SPO2_CRIT_HIGH:
+            flag("hyperoxia_critical", 3)
+        elif spo2 > SPO2_WARN_HIGH:
+            flag("hyperoxia", 1)
 
     # --- Light ---
     lux = reading.lightLux

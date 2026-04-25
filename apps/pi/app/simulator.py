@@ -9,13 +9,13 @@ from .models import SensorReading, WhatIfRequest, WhatIfResponse
 from .rules_engine import classify
 
 # Physiological Defaults (Infant)
-BPM_TARGET = 125.0
-SYS_TARGET = 75.0
-DIA_TARGET = 45.0
-SPO2_TARGET = 98.0
+BPM_TARGET = 127.5
+SYS_TARGET = 65.0
+DIA_TARGET = 40.0
+SPO2_TARGET = 97.5
 
 # Slow-variation factors (per second)
-VARIATION_SPEED = 0.05 
+VARIATION_SPEED = 0.02 
 
 
 def run_what_if(request: WhatIfRequest, base: SensorReading) -> WhatIfResponse:
@@ -42,11 +42,11 @@ def run_what_if(request: WhatIfRequest, base: SensorReading) -> WhatIfResponse:
         dia += random.uniform(-VARIATION_SPEED * 0.3, VARIATION_SPEED * 0.3)
         spo2 += random.uniform(-0.01, 0.01)
 
-        # Clamping to realistic infant ranges
-        bpm = max(60, min(220, bpm))
-        sys = max(30, min(120, sys))
-        dia = max(20, min(80, dia))
-        spo2 = max(70, min(100, spo2))
+        # Clamping to requested infant ranges
+        bpm = max(125.0, min(130.0, bpm))
+        sys = max(63.0, min(67.0, sys))
+        dia = max(38.0, min(42.0, dia))
+        spo2 = max(97.0, min(98.0, spo2))
 
         if step % 5 == 0:  # sample every 5s
             sim_reading = SensorReading(

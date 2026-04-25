@@ -129,10 +129,10 @@ async def simulate(request: WhatIfRequest) -> WhatIfResponse:
         # Use neutral defaults if no real data
         base = SensorReading(
             ts=int(time.time()),
-            bpm=120.0,
-            bloodPressureSystolic=70.0,
-            bloodPressureDiastolic=45.0,
-            spO2=98.0,
+            bpm=127.5,
+            bloodPressureSystolic=65.0,
+            bloodPressureDiastolic=40.0,
+            spO2=97.5,
             heaterCurrentA=0.5,
             heaterActive=True,
             lidDistanceCm=2.0,

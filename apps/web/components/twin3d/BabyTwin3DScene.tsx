@@ -6,6 +6,7 @@ import { OrbitControls } from '@react-three/drei';
 import * as THREE from 'three';
 import { NiftiHeartVolume } from './NiftiHeartVolume';
 import { stressToHex } from './useStressColor';
+import { useTwinStore } from '../../store/twin-store';
 
 interface BabyTwin3DSceneProps {
   stressScore: number;
@@ -142,6 +143,8 @@ export const BabyTwin3DScene = ({
   temperature,
   spO2,
 }: BabyTwin3DSceneProps) => {
+  const isAnimating     = useTwinStore((s) => s.isAnimating);
+  const toggleAnimation = useTwinStore((s) => s.toggleAnimation);
   const [showVessels,   setShowVessels]  = useState(true);
   const [hoveredPart,   setHoveredPart]  = useState<string | null>(null);
   const [hoveredLabel,  setHoveredLabel] = useState<string | null>(null);
@@ -226,6 +229,18 @@ export const BabyTwin3DScene = ({
             SpO₂ {spO2}%
           </span>
 
+          {/* Toggle heartbeat animation */}
+          <button
+            onClick={toggleAnimation}
+            className={`text-xs font-mono px-2 py-0.5 rounded border transition-all ${
+              isAnimating
+                ? 'bg-pink-700/50 text-pink-200 border-pink-600/50 hover:bg-pink-800/60'
+                : 'bg-slate-700/40 text-slate-400 border-slate-600/40 hover:bg-slate-600/40'
+            }`}
+          >
+            {isAnimating ? '⏸ Pause Beat' : '▶ Resume Beat'}
+          </button>
+
           {/* Toggle coronary vessels */}
           <button
             onClick={() => setShowVessels((v) => !v)}
@@ -252,36 +267,7 @@ export const BabyTwin3DScene = ({
         </div>
       </div>
 
-      {/* ── Stress bar ────────────────────────────────────────────────────── */}
-      <div className="flex items-center gap-2 px-2">
-        <span className="text-xs text-slate-500 font-mono w-16">STRESS</span>
-        <div className="flex-1 h-1.5 rounded-full bg-slate-700/50 overflow-hidden">
-          <div
-            className="h-full rounded-full transition-all duration-500"
-            style={{ width: `${stressScore}%`, backgroundColor: stressHex, boxShadow: `0 0 8px ${stressHex}` }}
-          />
-        </div>
-        <span className="text-xs font-mono font-bold w-8 text-right" style={{ color: stressHex }}>
-          {stressScore}
-        </span>
-      </div>
-
-      {/* ── SpO2 bar ──────────────────────────────────────────────────────── */}
-      <div className="flex items-center gap-2 px-2">
-        <span className="text-xs text-slate-500 font-mono w-16">SpO₂</span>
-        <div className="flex-1 h-1.5 rounded-full bg-slate-700/50 overflow-hidden">
-          <div
-            className="h-full rounded-full transition-all duration-500"
-            style={{ width: `${spO2}%`, backgroundColor: o2Hex, boxShadow: `0 0 6px ${o2Hex}` }}
-          />
-        </div>
-        <span className="text-xs font-mono font-bold w-8 text-right" style={{ color: o2Hex }}>
-          {spO2}%
-        </span>
-      </div>
-
-      {/* ══════════════════════════════════════════════════════════════════════
-          ── SIMULATION CONTROLS PANEL ────────────────────────────────────── */}
+      {/* ── SIMULATION CONTROLS PANEL ────────────────────────────────────── */}
       <div className="flex flex-col gap-2 px-2 py-2 bg-slate-900/70 rounded-lg border border-slate-700/40">
 
         {/* ─ Row: slice mode selector ──────────────────────────────────────── */}

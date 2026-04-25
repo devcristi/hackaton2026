@@ -29,6 +29,7 @@ import { useFrame } from '@react-three/fiber';
 import * as THREE from 'three';
 import { mergeVertices } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
 import { getCardiacFrame, toCardiacT } from '../../lib/cardiacAnimator';
+import { useTwinStore } from '../../store/twin-store';
 
 // ─── JSON mesh format ─────────────────────────────────────────────────────────
 interface MeshJson {
@@ -223,7 +224,9 @@ export const NiftiHeartVolume = ({
   }), []);
 
   // ── Animation loop ─────────────────────────────────────────────────────────
+  const isAnimating = useTwinStore((s) => s.isAnimating);
   useFrame(({ clock }) => {
+    if (!isAnimating) return;
     const elapsed = clock.getElapsedTime();
 
     // CardiacAnimator: per-segment scale + rotation
