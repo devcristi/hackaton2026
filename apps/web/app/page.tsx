@@ -56,12 +56,10 @@ const deriveStressScore = (s: TwinState): number => {
 export default function DashboardPage() {
   useTwinStream();
 
-  const state              = useTwinStore((s) => s.state);
-  const history            = useTwinStore((s) => s.history);
-  const setState           = useTwinStore((s) => s.setState);
-  const addHistory         = useTwinStore((s) => s.addHistory);
-  const fsmStateOverride   = useTwinStore((s) => s.fsmStateOverride);
-  const setFsmStateOverride = useTwinStore((s) => s.setFsmStateOverride);
+  const state      = useTwinStore((s) => s.state);
+  const history    = useTwinStore((s) => s.history);
+  const setState   = useTwinStore((s) => s.setState);
+  const addHistory = useTwinStore((s) => s.addHistory);
 
   useEffect(() => {
     fetchState()
@@ -78,12 +76,10 @@ export default function DashboardPage() {
   const spO2      = state?.reading.spO2 ?? 92;
   const tempC     = state?.reading.airTempC ?? state?.reading.mpuTempC ?? 37.0;
 
-  const derivedFsmState = useMemo(() => {
-    const result = state ? deriveFsmState(state) : "ok";
-    return result;
-  }, [state]);
-
-  const fsmState = fsmStateOverride ?? derivedFsmState;
+  const fsmState = useMemo(
+    () => (state ? deriveFsmState(state) : "ok"),
+    [state]
+  );
 
   if (!state) {
     return (
@@ -123,11 +119,7 @@ export default function DashboardPage() {
 
       {/* ── FSM STATUS BAR ─────────────────────────────────────────────────── */}
       <div className="flex-shrink-0">
-        <FsmStatusBar
-          current={fsmState}
-          isOverride={fsmStateOverride !== null}
-          onStateChange={setFsmStateOverride}
-        />
+        <FsmStatusBar current={fsmState} />
       </div>
 
       {/* ── TWO-COLUMN LAYOUT ──────────────────────────────────────────────── */}

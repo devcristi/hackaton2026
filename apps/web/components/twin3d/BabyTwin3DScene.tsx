@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useMemo, useEffect, useRef } from 'react';
+import { useState, useMemo, useEffect, useRef, useCallback } from 'react';
 import { Canvas, useThree, useFrame } from '@react-three/fiber';
 import { OrbitControls } from '@react-three/drei';
 import * as THREE from 'three';
@@ -156,6 +156,24 @@ export const BabyTwin3DScene = ({
   const [resetSignal, setResetSignal] = useState(0);
 
   const [targetCameraPosition, setTargetCameraPosition] = useState<[number, number, number] | null>(null);
+  const [isFullscreen, setIsFullscreen] = useState(false);
+  const canvasContainerRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    const onFsChange = () => {
+      setIsFullscreen(!!document.fullscreenElement);
+    };
+    document.addEventListener('fullscreenchange', onFsChange);
+    return () => document.removeEventListener('fullscreenchange', onFsChange);
+  }, []);
+
+  const toggleFullscreen = useCallback(() => {
+    if (!document.fullscreenElement) {
+      canvasContainerRef.current?.requestFullscreen();
+    } else {
+      document.exitFullscreen();
+    }
+  }, []);
 
   // ── Anatomy Visibility & Opacity ────────────────────────────────────────────
   const [visibleClasses, setVisibleClasses] = useState<Record<string, boolean>>({
@@ -325,7 +343,7 @@ export const BabyTwin3DScene = ({
             {anatomyParts.map((part) => {
               const legend  = ANATOMY_LEGEND.find(l => l.key === part.key);
               const color   = legend?.color ?? '#94a3b8';
-              const hovered = hoveredLabel === part.key;
+              const hovered = hoveredLabel === part.key || hoveredPart === part.key;
               return (
                 <label
                   key={part.key}
@@ -416,8 +434,28 @@ export const BabyTwin3DScene = ({
       </div>
 
       {/* ── 3D Canvas ─────────────────────────────────────────────────────── */}
-      <div className="relative flex-1 min-h-0 rounded-xl overflow-hidden border border-slate-700/50 bg-gradient-to-b from-slate-900 to-[#060a10]">
-        
+      <div
+        ref={canvasContainerRef}
+        className="relative flex-1 min-h-0 rounded-xl overflow-hidden border border-slate-700/50 bg-gradient-to-b from-slate-900 to-[#060a10]"
+      >
+
+        {/* Fullscreen Toggle Button */}
+        <button
+          onClick={toggleFullscreen}
+          title={isFullscreen ? 'Exit Fullscreen' : 'Expand to Fullscreen'}
+          className="absolute top-4 left-4 z-10 w-8 h-8 flex items-center justify-center rounded-full bg-slate-950/70 backdrop-blur-md border border-slate-700/60 text-slate-300 hover:text-white hover:bg-slate-800/80 hover:border-cyan-500/50 hover:shadow-[0_0_10px_rgba(0,220,255,0.25)] transition-all duration-200 shadow-lg"
+        >
+          {isFullscreen ? (
+            <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+              <path d="M8 3v3a2 2 0 0 1-2 2H3"/><path d="M21 8h-3a2 2 0 0 1-2-2V3"/><path d="M3 16h3a2 2 0 0 1 2 2v3"/><path d="M16 21v-3a2 2 0 0 1 2-2h3"/>
+            </svg>
+          ) : (
+            <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+              <path d="M3 7V3h4"/><path d="M17 3h4v4"/><path d="M21 17v4h-4"/><path d="M7 21H3v-4"/>
+            </svg>
+          )}
+        </button>
+
         {/* Navigation Gizmo Overlay */}
         <div className="absolute top-4 right-4 z-10 flex flex-col items-center gap-2">
           <div className="bg-slate-950/60 backdrop-blur-md p-1.5 rounded-full border border-slate-700/50 flex flex-col items-center gap-1 shadow-2xl">
@@ -455,19 +493,100 @@ export const BabyTwin3DScene = ({
           </div>
         </div>
 
-        {stenosisEvent && (
-          <div className="absolute top-4 left-1/2 -translate-x-1/2 bg-red-950/90 border border-red-500/50 rounded-xl p-3 shadow-[0_0_20px_rgba(220,38,38,0.4)] z-10 flex flex-col items-center animate-in fade-in slide-in-from-top-4">
-            <span className="text-red-400 text-xs font-mono font-bold uppercase tracking-widest mb-1">Hemodynamics Alert</span>
-            <div className="text-white font-bold text-lg">{stenosisEvent.occlusion}% Vessel Occlusion</div>
-            <div className="text-amber-200 text-sm font-mono mt-1">Est. Wall Shear Stress: {stenosisEvent.wss} Pa</div>
-            <button
-              onClick={() => setStenosisEvent(null)}
-              className="mt-3 text-[10px] uppercase tracking-wider text-slate-400 hover:text-white border border-slate-700 rounded px-3 py-1 hover:bg-slate-800 transition-colors"
-            >
-              Dismiss
-            </button>
-          </div>
-        )}
+        {stenosisEvent && (() => {
+          const intensity = stenosisEvent.occlusion / 100;
+          const pinchW     = Math.max(6, Math.round(40 * (1 - intensity)));  // lumen width at stenosis
+          const pinchX     = 80 - pinchW / 2;
+          const pressureKPa = (intensity * 8.5 + 1.5).toFixed(1);
+          return (
+            <div className="absolute top-4 left-1/2 -translate-x-1/2 bg-[#020916]/95 border border-cyan-500/40 rounded-xl p-3 shadow-[0_0_28px_rgba(0,200,255,0.35)] z-10 flex flex-col items-center animate-in fade-in slide-in-from-top-4 min-w-[220px]">
+              <span className="text-cyan-300 text-xs font-mono font-bold uppercase tracking-widest mb-1">⚙ Mechanical Stress Simulation</span>
+
+              {/* ── Pressure Heat-Map ─────────────────────────────── */}
+              <svg width="200" height="110" viewBox="0 0 200 110" className="my-2 rounded-lg overflow-visible">
+                <defs>
+                  {/* vibrant-blue radial pressure bloom — sits ABOVE the stenosis */}
+                  <radialGradient id="pgHot" cx="50%" cy="38%" r="52%">
+                    <stop offset="0%"   stopColor="#00ffff" stopOpacity={0.95 * Math.min(1, intensity + 0.25)} />
+                    <stop offset="28%"  stopColor="#00aaff" stopOpacity={0.75 * Math.min(1, intensity + 0.2)} />
+                    <stop offset="60%"  stopColor="#0044cc" stopOpacity={0.35 * Math.min(1, intensity + 0.1)} />
+                    <stop offset="100%" stopColor="#001166" stopOpacity="0" />
+                  </radialGradient>
+                  <radialGradient id="pgCore" cx="50%" cy="36%" r="22%">
+                    <stop offset="0%"   stopColor="#eeffff" stopOpacity={0.85 * Math.min(1, intensity + 0.3)} />
+                    <stop offset="100%" stopColor="#00ffff" stopOpacity="0" />
+                  </radialGradient>
+                  <linearGradient id="lumenGrad" x1="0%" y1="0%" x2="0%" y2="100%">
+                    <stop offset="0%"   stopColor="#0d2244" />
+                    <stop offset="100%" stopColor="#060e1c" />
+                  </linearGradient>
+                  {/* low-pressure zone below stenosis */}
+                  <radialGradient id="pgLow" cx="50%" cy="78%" r="35%">
+                    <stop offset="0%"   stopColor="#0033aa" stopOpacity={0.4 * intensity} />
+                    <stop offset="100%" stopColor="#001133" stopOpacity="0" />
+                  </radialGradient>
+                  <marker id="arr" markerWidth="6" markerHeight="6" refX="3" refY="3" orient="auto">
+                    <path d="M0,0 L0,6 L6,3 Z" fill="#0055aa" />
+                  </marker>
+                </defs>
+
+                {/* background */}
+                <rect width="200" height="110" fill="#020916" rx="8" />
+
+                {/* ── vessel — upper normal lumen (above stenosis) */}
+                <rect x="80" y="4" width="40" height="46" fill="url(#lumenGrad)" />
+                {/* vessel walls upper */}
+                <line x1="80" y1="4"  x2="80"  y2="50" stroke="#1e4488" strokeWidth="1.5" />
+                <line x1="120" y1="4" x2="120" y2="50" stroke="#1e4488" strokeWidth="1.5" />
+
+                {/* ── HIGH-PRESSURE HEATMAP — above & around the narrowing */}
+                <ellipse cx="100" cy="44" rx="55" ry="28" fill="url(#pgHot)" />
+                <ellipse cx="100" cy="40" rx="22" ry="12" fill="url(#pgCore)" />
+
+                {/* ── stenosis narrowing geometry */}
+                <path
+                  d={`M 80 50 Q ${80 + (40 - pinchW) * 0.4} 62 ${pinchX} 70 L ${pinchX + pinchW} 70 Q ${120 - (40 - pinchW) * 0.4} 62 120 50 Z`}
+                  fill="#060e1c"
+                  stroke="#0066cc"
+                  strokeWidth="1.2"
+                />
+
+                {/* ── vessel — lower narrow lumen (below stenosis) */}
+                <rect x={pinchX} y="70" width={pinchW} height="32" fill="#040c18" />
+                <line x1={pinchX}          y1="70" x2={pinchX}          y2="102" stroke="#0e2d5a" strokeWidth="1.2" />
+                <line x1={pinchX + pinchW} y1="70" x2={pinchX + pinchW} y2="102" stroke="#0e2d5a" strokeWidth="1.2" />
+
+                {/* ── low-pressure zone below */}
+                <ellipse cx="100" cy="88" rx="32" ry="14" fill="url(#pgLow)" />
+
+                {/* ── labels */}
+                <text x="136" y="38" fill="#00e5ff" fontSize="8" fontFamily="monospace" fontWeight="bold">↑ {pressureKPa} kPa</text>
+                <text x="136" y="49" fill="#0088bb" fontSize="7" fontFamily="monospace">HIGH</text>
+                <text x="136" y="88" fill="#1a4488" fontSize="7" fontFamily="monospace">P DROP</text>
+
+                {/* flow arrow */}
+                <text x="56" y="58" fill="#0055aa" fontSize="9" fontFamily="monospace">flow</text>
+                <line x1="68" y1="44" x2="68" y2="66" stroke="#0055aa" strokeWidth="1" markerEnd="url(#arr)" />
+
+                {/* scale bar */}
+                <rect x="20" y="20" width="6" height={Math.round(intensity * 60 + 10)} rx="3"
+                  fill={`rgba(0,${Math.round(200 - intensity * 60)},255,0.85)`} />
+                <rect x="20" y={80 - Math.round(intensity * 30 + 8)} width="6" height={Math.round(intensity * 30 + 8)} rx="3"
+                  fill="rgba(0,60,160,0.5)" />
+                <text x="14" y="18" fill="#0088cc" fontSize="6" fontFamily="monospace">P</text>
+              </svg>
+
+              <div className="text-white font-bold text-base">{stenosisEvent.occlusion}% Vessel Occlusion</div>
+              <div className="text-cyan-200 text-xs font-mono mt-0.5">Wall Shear Stress: <span className="text-cyan-400 font-bold">{stenosisEvent.wss} Pa</span></div>
+              <button
+                onClick={() => setStenosisEvent(null)}
+                className="mt-2 text-[10px] uppercase tracking-wider text-slate-400 hover:text-cyan-300 border border-slate-700 hover:border-cyan-700 rounded px-3 py-1 hover:bg-cyan-950/40 transition-colors"
+              >
+                Dismiss
+              </button>
+            </div>
+          );
+        })()}
 
         {stenosisMode && !stenosisEvent && (
           <div className="absolute bottom-4 left-1/2 -translate-x-1/2 bg-yellow-950/80 border border-yellow-500/50 rounded px-4 py-2 z-10 pointer-events-none">

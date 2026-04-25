@@ -226,33 +226,34 @@ export const NiftiHeartVolume = ({
   // ── Animation loop ─────────────────────────────────────────────────────────
   const isAnimating = useTwinStore((s) => s.isAnimating);
   useFrame(({ clock }) => {
-    if (!isAnimating) return;
     const elapsed = clock.getElapsedTime();
 
-    // CardiacAnimator: per-segment scale + rotation
-    const ct    = toCardiacT(elapsed, heartRate);
-    const frame = getCardiacFrame(ct);
+    // ── Cardiac motion (scale / rotation) — only when animating ─────────────
+    const frame = isAnimating
+      ? getCardiacFrame(toCardiacT(elapsed, heartRate))
+      : getCardiacFrame(0); // frozen at diastolic baseline (t=0)
 
-    if (lvRef.current)    { lvRef.current.scale.set(...frame.leftVentricle.scale);   lvRef.current.rotation.z    = frame.leftVentricle.rotation[2]; }
-    if (rvRef.current)    { rvRef.current.scale.set(...frame.rightVentricle.scale);  rvRef.current.rotation.z    = frame.rightVentricle.rotation[2]; }
-    if (laRef.current)    { laRef.current.scale.set(...frame.leftAtrium.scale); }
-    if (raRef.current)    { raRef.current.scale.set(...frame.rightAtrium.scale); }
-    if (myoRef.current)   { myoRef.current.scale.set(...frame.myocardium.scale); }
-    if (aortaRef.current) { aortaRef.current.scale.set(...frame.aorta.scale); }
-    if (paRef.current)    { paRef.current.scale.set(...frame.pulmonaryArtery.scale); }
-    if (corRef.current)   { corRef.current.scale.set(...frame.coronaries.scale); }
+    if (isAnimating) {
+      if (lvRef.current)    { lvRef.current.scale.set(...frame.leftVentricle.scale);   lvRef.current.rotation.z    = frame.leftVentricle.rotation[2]; }
+      if (rvRef.current)    { rvRef.current.scale.set(...frame.rightVentricle.scale);  rvRef.current.rotation.z    = frame.rightVentricle.rotation[2]; }
+      if (laRef.current)    { laRef.current.scale.set(...frame.leftAtrium.scale); }
+      if (raRef.current)    { raRef.current.scale.set(...frame.rightAtrium.scale); }
+      if (myoRef.current)   { myoRef.current.scale.set(...frame.myocardium.scale); }
+      if (aortaRef.current) { aortaRef.current.scale.set(...frame.aorta.scale); }
+      if (paRef.current)    { paRef.current.scale.set(...frame.pulmonaryArtery.scale); }
+      if (corRef.current)   { corRef.current.scale.set(...frame.coronaries.scale); }
 
-    if (groupRef.current) {
-      groupRef.current.rotation.y = Math.sin(elapsed * 0.08) * 0.25;
-      groupRef.current.rotation.z = Math.sin(elapsed * 0.05) * 0.04;
+      if (groupRef.current) {
+        groupRef.current.rotation.y = Math.sin(elapsed * 0.08) * 0.25;
+        groupRef.current.rotation.z = Math.sin(elapsed * 0.05) * 0.04;
+      }
     }
 
-    // Emissive animation — kept subtle so anatomy colours remain dominant
+    // ── Emissive + hover highlight — always runs (needed for hover to work) ──
     const sf   = stressScore / 100;
     const ox   = spO2 / 100;
     const tdev = Math.max(0, temperature - 36.5) / 3.0;
-    const beatPulse = frame.phase === 'ventricularSystole' ? frame.phaseProgress * 0.12 : 0;
-    // Max emissive intensity capped at 0.32 to avoid colour wash-out
+    const beatPulse = isAnimating && frame.phase === 'ventricularSystole' ? frame.phaseProgress * 0.12 : 0;
     const emI = 0.04 + sf * 0.20 + tdev * 0.08 + beatPulse;
 
     const hp = hoveredPartRef.current;
@@ -263,7 +264,7 @@ export const NiftiHeartVolume = ({
     });
 
     const oxy = ox * ox;
-    const corPulse = frame.phase === 'diastole' && frame.phaseProgress < 0.35
+    const corPulse = isAnimating && frame.phase === 'diastole' && frame.phaseProgress < 0.35
       ? (frame.phaseProgress / 0.35) * 0.18
       : 0;
     vesselMats.current.forEach(mat => {

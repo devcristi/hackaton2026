@@ -69,8 +69,16 @@ export const HeartMesh = ({
 
   // ── Animation loop ────────────────────────────────────────────────────────
   useFrame(({ clock }) => {
-    if (!isAnimating) return;
     const elapsed = clock.getElapsedTime();
+
+    // When paused: freeze at diastolic baseline; drift still runs
+    if (!isAnimating) {
+      if (groupRef.current) {
+        groupRef.current.rotation.y = Math.sin(elapsed * 0.08) * 0.25;
+        groupRef.current.rotation.z = Math.sin(elapsed * 0.05) * 0.04;
+      }
+      return;
+    }
 
     // Convert wall-clock seconds + BPM → normalised cardiac cycle time [0,1]
     const t     = toCardiacT(elapsed, heartRate);

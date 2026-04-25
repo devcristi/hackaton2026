@@ -6,17 +6,17 @@ export function generateMockReading(): SensorReading {
   return {
     ts,
     airTempC: 37.0,
-    humidityPct: 50,
+    humidityPct: 55,
     airQualityRaw: 120,
     lightRaw: 550,
-    lidDistanceCm: 21,
-    heaterCurrentA: 0.6,
+    lidDistanceCm: 2.0,   // closed lid — threshold is 5 cm
+    heaterCurrentA: 0.5,
     accelX: 0,
     accelY: 0,
-    accelZ: 9.81,
+    accelZ: 1.0,          // g-units (gravity at rest), NOT m/s²
     mpuTempC: 37.2,
-    riskScore: 5,
-    espStatus: "OK",
+    riskScore: 0.05,      // 0–1 scale
+    espStatus: "SAFE",
     piStatus: "OK",
     fanStatus: "OFF",
     bpm: 140,

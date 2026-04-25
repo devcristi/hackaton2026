@@ -1,24 +1,65 @@
 "use client";
 
-import type { TwinState } from "../lib/types";
+import type { Severity, TwinState } from "../lib/types";
+import {
+  airQualitySeverity,
+  airTempSeverity,
+  bpmSeverity,
+  diaSeverity,
+  heaterSeverity,
+  humiditySeverity,
+  lidSeverity,
+  riskSeverity,
+  spO2Severity,
+  sysSeverity,
+} from "../lib/sensorSeverity";
 
 // ── FSM State type ────────────────────────────────────────────────────────────
 export type FsmState = "ok" | "warning" | "critical" | "motion";
 
-// ── Derive FSM state from backend TwinState ───────────────────────────────────
+// ── Severity rank (higher = worse) ───────────────────────────────────────────
+const SEVERITY_RANK: Record<Severity, number> = {
+  normal:   0,
+  watch:    1,
+  alert:    2,
+  critical: 3,
+};
+
+const worstSeverity = (...severities: Severity[]): Severity =>
+  severities.reduce<Severity>(
+    (worst, s) => (SEVERITY_RANK[s] > SEVERITY_RANK[worst] ? s : worst),
+    "normal"
+  );
+
+// ── Derive FSM state from live sensor readings ────────────────────────────────
 export const deriveFsmState = (s: TwinState): FsmState => {
-  const ax = s.reading.accelX ?? 0;
-  const ay = s.reading.accelY ?? 0;
-  const az = s.reading.accelZ ?? 0;
+  const r = s.reading;
+
+  // Motion check — accelerometer jerk overrides severity
+  const ax = r.accelX ?? 0;
+  const ay = r.accelY ?? 0;
+  const az = r.accelZ ?? 0;
   const jerk = Math.sqrt(ax * ax + ay * ay + az * az);
-
-  console.log(`[deriveFsmState] jerk=${jerk.toFixed(2)}, severity=${s.severity}`);
-
-  // Motion check first — even if severity is OK the incubator might be moved
   if (jerk > 1.2) return "motion";
 
-  if (s.severity === "critical") return "critical";
-  if (s.severity === "alert" || s.severity === "watch") return "warning";
+  // Compute worst severity across every monitored sensor
+  const worst = worstSeverity(
+    bpmSeverity(r.bpm),
+    spO2Severity(r.spO2),
+    sysSeverity(r.bloodPressureSystolic),
+    diaSeverity(r.bloodPressureDiastolic),
+    airTempSeverity(r.airTempC),
+    humiditySeverity(r.humidityPct),
+    airQualitySeverity(r.airQualityRaw),
+    lidSeverity(r.lidDistanceCm),
+    heaterSeverity(r.heaterCurrentA),
+    riskSeverity(r.riskScore),
+    // Also honour backend severity as a floor
+    s.severity,
+  );
+
+  if (worst === "critical") return "critical";
+  if (worst === "alert" || worst === "watch") return "warning";
   return "ok";
 };
 
