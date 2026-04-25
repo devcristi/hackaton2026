@@ -288,7 +288,7 @@ export const BabyTwin3DScene = ({
         <div className="flex items-center gap-2 flex-wrap">
           <HudLabel>✂ Slice</HudLabel>
 
-          {(['none', 'horizontal', 'vertical'] as SliceMode[]).map((mode) => {
+          {(['horizontal', 'vertical'] as SliceMode[]).map((mode) => {
             const labels: Record<SliceMode, string> = {
               none:       '⊘ Off',
               horizontal: '— Horiz (Y)',
@@ -298,7 +298,7 @@ export const BabyTwin3DScene = ({
             return (
               <button
                 key={mode}
-                onClick={() => { setSliceMode(mode); if (mode === 'none') setSliceDepth(0); }}
+                onClick={() => { setSliceMode(mode); }}
                 className={`text-xs font-mono px-2 py-0.5 rounded border transition-all ${
                   active
                     ? 'bg-violet-700/60 text-violet-100 border-violet-500/60'
