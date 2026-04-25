@@ -5,7 +5,6 @@ import { Canvas, useThree, useFrame } from '@react-three/fiber';
 import { OrbitControls } from '@react-three/drei';
 import * as THREE from 'three';
 import { NiftiHeartVolume } from './NiftiHeartVolume';
-import { BloodParticles } from './BloodParticles';
 import { stressToHex } from './useStressColor';
 
 interface BabyTwin3DSceneProps {
@@ -35,29 +34,13 @@ const EnableClipping = () => {
 // ─── Camera manager to handle smooth transitions ─────────────────────────────
 const CameraManager = ({ targetPosition }: { targetPosition: [number, number, number] | null }) => {
   const { camera } = useThree();
-  const targetVec = useMemo(() => new THREE.Vector3(), []);
-  const isAnimating = useRef(false);
 
   useEffect(() => {
     if (targetPosition) {
-      targetVec.set(...targetPosition);
-      isAnimating.current = true;
+      camera.position.set(...targetPosition);
+      // Let OrbitControls handle the look direction
     }
-  }, [targetPosition, targetVec]);
-
-  useFrame(() => {
-    if (isAnimating.current && targetPosition) {
-      // Smoothly interpolate position
-      camera.position.lerp(targetVec, 0.1);
-      camera.lookAt(0, 0, 0);
-
-      // Stop animating when close enough to target
-      if (camera.position.distanceTo(targetVec) < 0.001) {
-        isAnimating.current = false;
-        camera.position.copy(targetVec);
-      }
-    }
-  });
+  }, [targetPosition, camera]);
 
   return null;
 };
@@ -69,7 +52,6 @@ interface SceneProps {
   temperature:   number;
   spO2:          number;
   showVessels:   boolean;
-  showParticles: boolean;
   clipPlane:     THREE.Plane | null;
   visibleClasses: Record<string, boolean>;
   opacity:       number;
@@ -78,6 +60,7 @@ interface SceneProps {
   stenosisIntensity: number;
   resetSignal: number;
   onStenosis: (occlusion: number, wss: number) => void;
+  onHover: (part: string | null) => void;
   targetCameraPosition: [number, number, number] | null;
 }
 
@@ -87,7 +70,6 @@ const Scene = ({
   temperature,
   spO2,
   showVessels,
-  showParticles,
   clipPlane,
   visibleClasses,
   opacity,
@@ -96,6 +78,7 @@ const Scene = ({
   stenosisIntensity,
   resetSignal,
   onStenosis,
+  onHover,
   targetCameraPosition,
 }: SceneProps) => (
   <>
@@ -109,7 +92,7 @@ const Scene = ({
     <pointLight position={[0, -2, 2]} intensity={0.5} color="#881122" />
     <spotLight position={[0, 3, 2]} angle={0.55} penumbra={0.7} intensity={1.2} color="#ffffff" castShadow />
     <gridHelper args={[6, 30, '#0d1a2e', '#0a1220']} position={[0, -1.2, 0]} />
-    <OrbitControls enablePan={false} minDistance={0.5} maxDistance={8.0} autoRotate={false} makeDefault />
+    <OrbitControls enablePan={false} minDistance={0.5} maxDistance={40.0} autoRotate={false} makeDefault />
 
     <NiftiHeartVolume
       stressScore={stressScore}
@@ -125,13 +108,24 @@ const Scene = ({
       stenosisIntensity={stenosisIntensity}
       resetSignal={resetSignal}
       onStenosis={onStenosis}
+      onHover={onHover}
     />
 
-    {showParticles && (
-      <BloodParticles spO2={spO2} heartRate={heartRate} />
-    )}
   </>
 );
+
+// ─── Anatomy legend data (kept in sync with NiftiHeartVolume colour palette) ─
+const ANATOMY_LEGEND: { key: string; label: string; color: string }[] = [
+  { key: 'myocardium',        label: 'Myocardium',       color: '#e8909a' },
+  { key: 'left_atrium',       label: 'Left Atrium',      color: '#2563c4' },
+  { key: 'left_ventricle',    label: 'Left Ventricle',   color: '#16a34a' },
+  { key: 'right_atrium',      label: 'Right Atrium',     color: '#0891b2' },
+  { key: 'right_ventricle',   label: 'Right Ventricle',  color: '#ca8a04' },
+  { key: 'aorta',             label: 'Aorta',            color: '#7c3aed' },
+  { key: 'pulmonary_artery',  label: 'Pulmonary Artery', color: '#db2777' },
+  { key: 'heart_and_fat',     label: 'Heart & Fat',      color: '#d4d4aa' },
+  { key: 'coronary_arteries', label: 'Coronary Artery',  color: '#ef4444' },
+];
 
 // ─── Reusable small label ─────────────────────────────────────────────────────
 const HudLabel = ({ children }: { children: React.ReactNode }) => (
@@ -148,8 +142,9 @@ export const BabyTwin3DScene = ({
   temperature,
   spO2,
 }: BabyTwin3DSceneProps) => {
-  const [showVessels,   setShowVessels]   = useState(true);
-  const [showParticles, setShowParticles] = useState(true);
+  const [showVessels,   setShowVessels]  = useState(true);
+  const [hoveredPart,   setHoveredPart]  = useState<string | null>(null);
+  const [hoveredLabel,  setHoveredLabel] = useState<string | null>(null);
 
   const [stenosisMode, setStenosisMode] = useState(false);
   const [stenosisEvent, setStenosisEvent] = useState<{occlusion: number, wss: number} | null>(null);
@@ -170,7 +165,7 @@ export const BabyTwin3DScene = ({
     pulmonary_artery: true,
     coronary_arteries: true,
   });
-  const [opacity, setOpacity] = useState(100);
+  const [opacity, setOpacity] = useState(82);
 
   const anatomyParts = [
     { key: 'myocardium', label: 'Myocardium' },
@@ -241,18 +236,6 @@ export const BabyTwin3DScene = ({
             }`}
           >
             {showVessels ? '🩸 Vessels ON' : '🩸 Vessels OFF'}
-          </button>
-
-          {/* Toggle blood particles */}
-          <button
-            onClick={() => setShowParticles((v) => !v)}
-            className={`text-xs font-mono px-2 py-0.5 rounded border transition-all ${
-              showParticles
-                ? 'bg-rose-800/50 text-rose-200 border-rose-700/50'
-                : 'bg-slate-700/40 text-slate-400 border-slate-600/40 hover:bg-slate-600/40'
-            }`}
-          >
-            {showParticles ? '💉 RBCs ON' : '💉 RBCs OFF'}
           </button>
 
           {/* Stenosis Tool */}
@@ -353,17 +336,33 @@ export const BabyTwin3DScene = ({
         <div className="flex items-center gap-2 flex-wrap border-t border-slate-700/40 pt-2 mt-2">
           <HudLabel>👁 Parts</HudLabel>
           <div className="flex gap-2 flex-wrap">
-            {anatomyParts.map((part) => (
-              <label key={part.key} className="flex items-center gap-1 text-xs font-mono text-slate-300 bg-slate-800/50 px-2 py-0.5 rounded cursor-pointer hover:bg-slate-700/50">
-                <input
-                  type="checkbox"
-                  checked={visibleClasses[part.key] !== false}
-                  onChange={(e) => setVisibleClasses(prev => ({ ...prev, [part.key]: e.target.checked }))}
-                  className="accent-violet-500"
-                />
-                {part.label}
-              </label>
-            ))}
+            {anatomyParts.map((part) => {
+              const legend  = ANATOMY_LEGEND.find(l => l.key === part.key);
+              const color   = legend?.color ?? '#94a3b8';
+              const hovered = hoveredLabel === part.key;
+              return (
+                <label
+                  key={part.key}
+                  onMouseEnter={() => setHoveredLabel(part.key)}
+                  onMouseLeave={() => setHoveredLabel(null)}
+                  className="flex items-center gap-1 text-xs font-mono px-2 py-0.5 rounded cursor-pointer transition-all duration-150"
+                  style={{
+                    backgroundColor: hovered ? `${color}22` : 'rgba(30,41,59,0.5)',
+                    color:           hovered ? color        : '#cbd5e1',
+                    border:          `1px solid ${hovered ? `${color}66` : 'transparent'}`,
+                    boxShadow:       hovered ? `0 0 8px 1px ${color}44` : 'none',
+                  }}
+                >
+                  <input
+                    type="checkbox"
+                    checked={visibleClasses[part.key] !== false}
+                    onChange={(e) => setVisibleClasses(prev => ({ ...prev, [part.key]: e.target.checked }))}
+                    className="accent-violet-500"
+                  />
+                  {part.label}
+                </label>
+              );
+            })}
           </div>
         </div>
 
@@ -502,7 +501,6 @@ export const BabyTwin3DScene = ({
             temperature={temperature}
             spO2={spO2}
             showVessels={showVessels}
-            showParticles={showParticles}
             clipPlane={clipPlane}
             visibleClasses={visibleClasses}
             opacity={opacity / 100.0}
@@ -511,33 +509,10 @@ export const BabyTwin3DScene = ({
             stenosisIntensity={stenosisIntensity}
             resetSignal={resetSignal}
             onStenosis={(occlusion, wss) => setStenosisEvent({ occlusion, wss })}
+            onHover={(p) => setHoveredPart(p)}
             targetCameraPosition={targetCameraPosition}
           />
         </Canvas>
-      </div>
-
-      {/* ── Real anatomy legend ───────────────────────────────────────────── */}
-      <div className="flex justify-center gap-3 px-2 pb-1 flex-wrap">
-        {[
-          { label: 'LV',    color: '#c41020', desc: 'Left Ventricle' },
-          { label: 'RV',    color: '#941010', desc: 'Right Ventricle' },
-          { label: 'Aorta', color: '#a00808', desc: 'Aorta' },
-          { label: 'PA',    color: '#3828aa', desc: 'Pulm. Artery' },
-          { label: 'LAD',   color: '#dd1818', desc: 'Coronary (art.)' },
-          { label: 'Vein',  color: '#5012aa', desc: 'Coronary vein' },
-          { label: 'Flow',  color: '#ff6644', desc: 'RBC particles' },
-        ].map((item) => (
-          <div key={item.label} className="flex items-center gap-1">
-            <div
-              className="w-2 h-2 rounded-full"
-              style={{ backgroundColor: item.color, boxShadow: `0 0 4px ${item.color}` }}
-            />
-            <span className="text-xs text-slate-400 font-mono">
-              {item.label}{' '}
-              <span className="text-slate-600 hidden sm:inline">{item.desc}</span>
-            </span>
-          </div>
-        ))}
       </div>
 
     </div>
